@@ -1,0 +1,4 @@
+-Reviews
+-Authentication
+  -Change controllers and models to require auth
+-Native Schema validation? 
