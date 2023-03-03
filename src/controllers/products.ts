@@ -16,7 +16,7 @@ export const getProducts: RequestHandler = async (req, res) => {
 };
 
 export const getProduct: RequestHandler = async (req, res) => {
-  const id = req?.params?.id;
+  const id = req.params.id;
   try {
     const collection = db.collection("products");
     const query = { _id: new ObjectId(id) };
@@ -58,8 +58,17 @@ export const createProduct: RequestHandler = async (req, res) => {
   try {
     const collection = db.collection("products");
     const newProduct = new Product(title, description, price);
-    const product = await collection.insertOne(newProduct);
-    res.status(201).json({ message: "Product Created", product });
+    const productResult = await collection.insertOne(newProduct);
+    res.status(201).json({
+      message: "Product Created",
+      product: {
+        id: productResult.insertedId,
+        title: title,
+        description: description,
+        price: price,
+      },
+      productResult,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server Error" });
@@ -67,7 +76,7 @@ export const createProduct: RequestHandler = async (req, res) => {
 };
 
 export const updateProduct: RequestHandler = async (req, res) => {
-  const id = req?.params?.id;
+  const id = req.params.id;
   const title = (req.body as { title: string }).title;
   const description = (req.body as { description: string }).description;
   const price = (req.body as { price: number }).price;
@@ -98,15 +107,19 @@ export const updateProduct: RequestHandler = async (req, res) => {
     const collection = db.collection("products");
     const query = { _id: new ObjectId(id) };
 
-    const oldProduct = (await collection.findOne(query)) as Product;
-    if (!oldProduct) {
+    const product = (await collection.findOne(query)) as Product;
+    if (!product) {
       return res.status(404).json({ message: "Product Not Found" });
     }
 
-    const product = await collection.updateOne(query, {
+    const productResult = await collection.updateOne(query, {
       $set: { title, description, price },
     });
-    res.status(200).json({ message: "Product Updated", product });
+    res.status(200).json({
+      message: "Product Updated",
+      product: { id: id, title, description, price, reviews: product.reviews },
+      productResult,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server Error" });
@@ -114,18 +127,27 @@ export const updateProduct: RequestHandler = async (req, res) => {
 };
 
 export const deleteProduct: RequestHandler = async (req, res) => {
-  const id = req?.params?.id;
+  const id = req.params.id;
   try {
-    const collection = db.collection("products");
+    const productsCollection = db.collection("products");
+    const reviewsCollection = db.collection("reviews");
     const query = { _id: new ObjectId(id) };
 
-    const oldProduct = (await collection.findOne(query)) as Product;
-    if (!oldProduct) {
+    const product = (await productsCollection.findOne(query)) as Product;
+    if (!product) {
       return res.status(404).json({ message: "Product Not Found" });
     }
 
-    const product = await collection.deleteOne(query);
-    res.status(200).json({ message: "Product Deleted", product });
+    if (product.reviews && product.reviews.length > 0) {
+      const reviewIds = product.reviews.map(
+        (reviewId: ObjectId) => new ObjectId(reviewId)
+      );
+      await reviewsCollection.deleteMany({ _id: { $in: reviewIds } });
+    }
+
+    const productResult = await productsCollection.deleteOne(query);
+
+    res.status(200).json({ message: "Product Deleted", productResult });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server Error" });

@@ -6,6 +6,7 @@ import morgan from "morgan";
 
 // import authRoutes from "./routes/auth";
 import productsRoutes from "./routes/products.js";
+import reviewsRoutes from "./routes/reviews.js";
 
 const app: Express = express();
 
@@ -19,6 +20,7 @@ app.get("/", (req: Request, res: Response) => {
 
 // app.use("/auth", authRoutes);
 app.use("/products", productsRoutes);
+app.use("/reviews", reviewsRoutes);
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   res.status(500).json({ error: err.message });
