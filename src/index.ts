@@ -4,7 +4,7 @@ import bodyParser from "body-parser";
 import { port } from "./config.js";
 import morgan from "morgan";
 
-// import authRoutes from "./routes/auth";
+import authRoutes from "./routes/auth.js";
 import productsRoutes from "./routes/products.js";
 import reviewsRoutes from "./routes/reviews.js";
 
@@ -18,7 +18,7 @@ app.get("/", (req: Request, res: Response) => {
   res.send("ProductsAPP Server is running");
 });
 
-// app.use("/auth", authRoutes);
+app.use("/auth", authRoutes);
 app.use("/products", productsRoutes);
 app.use("/reviews", reviewsRoutes);
 

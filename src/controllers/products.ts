@@ -2,12 +2,13 @@ import { RequestHandler } from "express";
 import { ObjectId } from "mongodb";
 import db from "../db.js";
 import Product from "../models/product.js";
+import User from "../models/user.js";
+import { CustomRequest } from "../middlewares/auth.js";
 
 export const getProducts: RequestHandler = async (req, res) => {
-  console.log("test");
   try {
-    const collection = db.collection("products");
-    const products = (await collection.find().toArray()) as Product[];
+    const productsCollection = db.collection("products");
+    const products = (await productsCollection.find().toArray()) as Product[];
     res.status(200).json({ message: "Products Fetched", products });
   } catch (error) {
     console.error(error);
@@ -18,9 +19,9 @@ export const getProducts: RequestHandler = async (req, res) => {
 export const getProduct: RequestHandler = async (req, res) => {
   const id = req.params.id;
   try {
-    const collection = db.collection("products");
+    const productsCollection = db.collection("products");
     const query = { _id: new ObjectId(id) };
-    const product = (await collection.findOne(query)) as Product;
+    const product = (await productsCollection.findOne(query)) as Product;
     res.status(200).json({ message: "Product Fetched", product });
   } catch (error) {
     console.error(error);
@@ -28,7 +29,10 @@ export const getProduct: RequestHandler = async (req, res) => {
   }
 };
 
-export const createProduct: RequestHandler = async (req, res) => {
+export const createProduct: RequestHandler = async (req: CustomRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
   const title = (req.body as { title: string }).title;
   const description = (req.body as { description: string }).description;
   const price = (req.body as { price: number }).price;
@@ -56,9 +60,20 @@ export const createProduct: RequestHandler = async (req, res) => {
   }
 
   try {
-    const collection = db.collection("products");
-    const newProduct = new Product(title, description, price);
-    const productResult = await collection.insertOne(newProduct);
+    const userCollection = db.collection("users");
+    const userQuery = { _id: new ObjectId(userId) };
+    const user = (await userCollection.findOne(userQuery)) as User;
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const productsCollection = db.collection("products");
+    const productResult = await productsCollection.insertOne({
+      title,
+      description,
+      price,
+      user: new ObjectId(userId),
+    });
     res.status(201).json({
       message: "Product Created",
       product: {
@@ -66,6 +81,7 @@ export const createProduct: RequestHandler = async (req, res) => {
         title: title,
         description: description,
         price: price,
+        user: userId,
       },
       productResult,
     });
@@ -75,7 +91,10 @@ export const createProduct: RequestHandler = async (req, res) => {
   }
 };
 
-export const updateProduct: RequestHandler = async (req, res) => {
+export const updateProduct: RequestHandler = async (req: CustomRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
   const id = req.params.id;
   const title = (req.body as { title: string }).title;
   const description = (req.body as { description: string }).description;
@@ -104,20 +123,37 @@ export const updateProduct: RequestHandler = async (req, res) => {
   }
 
   try {
-    const collection = db.collection("products");
+    const userCollection = db.collection("users");
+    const userQuery = { _id: new ObjectId(userId) };
+    const user = (await userCollection.findOne(userQuery)) as User;
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const productsCollection = db.collection("products");
     const query = { _id: new ObjectId(id) };
 
-    const product = (await collection.findOne(query)) as Product;
+    const product = (await productsCollection.findOne(query)) as Product;
     if (!product) {
       return res.status(404).json({ message: "Product Not Found" });
     }
 
-    const productResult = await collection.updateOne(query, {
+    if (user._id.toString() !== product.user.toString())
+      return res.status(401).json({ message: "Unauthorized" });
+
+    const productResult = await productsCollection.updateOne(query, {
       $set: { title, description, price },
     });
     res.status(200).json({
       message: "Product Updated",
-      product: { id: id, title, description, price, reviews: product.reviews },
+      product: {
+        id: id,
+        title,
+        description,
+        price,
+        reviews: product.reviews,
+        user: product.user,
+      },
       productResult,
     });
   } catch (error) {
@@ -126,9 +162,19 @@ export const updateProduct: RequestHandler = async (req, res) => {
   }
 };
 
-export const deleteProduct: RequestHandler = async (req, res) => {
+export const deleteProduct: RequestHandler = async (req: CustomRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
   const id = req.params.id;
   try {
+    const userCollection = db.collection("users");
+    const userQuery = { _id: new ObjectId(userId) };
+    const user = (await userCollection.findOne(userQuery)) as User;
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const productsCollection = db.collection("products");
     const reviewsCollection = db.collection("reviews");
     const query = { _id: new ObjectId(id) };
@@ -137,6 +183,9 @@ export const deleteProduct: RequestHandler = async (req, res) => {
     if (!product) {
       return res.status(404).json({ message: "Product Not Found" });
     }
+
+    if (user._id.toString() !== product.user.toString())
+      return res.status(401).json({ message: "Unauthorized" });
 
     if (product.reviews && product.reviews.length > 0) {
       const reviewIds = product.reviews.map(

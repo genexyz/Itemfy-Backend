@@ -1,3 +1,7 @@
--Authentication
-  -Change controllers and models to require auth
+TODO:
+-Deploy (and change mongo atlas IP config)
+
+May do:
 -Native Schema validation? 
+-Transactions?
+-Refresh Token route or middleware?

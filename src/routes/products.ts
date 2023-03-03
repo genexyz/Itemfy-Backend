@@ -1,4 +1,5 @@
 import express, { Router } from "express";
+import { isAuthenticated } from "../middlewares/auth.js";
 import {
   getProducts,
   getProduct,
@@ -15,10 +16,10 @@ router.get("/", getProducts);
 
 router.get("/:id", getProduct);
 
-router.post("/", createProduct);
+router.post("/", isAuthenticated, createProduct);
 
-router.patch("/:id", updateProduct);
+router.patch("/:id", isAuthenticated, updateProduct);
 
-router.delete("/:id", deleteProduct);
+router.delete("/:id", isAuthenticated, deleteProduct);
 
 export default router;

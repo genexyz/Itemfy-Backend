@@ -1,4 +1,5 @@
 import express, { Router } from "express";
+import { isAuthenticated } from "../middlewares/auth.js";
 import {
   getReviews,
   getReview,
@@ -15,10 +16,10 @@ router.get("/", getReviews);
 
 router.get("/:id", getReview);
 
-router.post("/", createReview);
+router.post("/", isAuthenticated, createReview);
 
-router.patch("/:id", updateReview);
+router.patch("/:id", isAuthenticated, updateReview);
 
-router.delete("/:id", deleteReview);
+router.delete("/:id", isAuthenticated, deleteReview);
 
 export default router;

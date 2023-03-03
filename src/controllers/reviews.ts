@@ -2,11 +2,16 @@ import { RequestHandler } from "express";
 import { ObjectId } from "mongodb";
 import db from "../db.js";
 import Review from "../models/review.js";
+import Product from "../models/product.js";
+import User from "../models/user.js";
+import { CustomRequest } from "../middlewares/auth.js";
 
 export const getReviews: RequestHandler = async (req, res) => {
   try {
-    const collection = db.collection("reviews");
-    const reviews = (await collection.find().toArray()) as Review[];
+    const reviewsCollection = db.collection("reviews");
+    const reviews = (await reviewsCollection
+      .find({}, { projection: { user: 0 } })
+      .toArray()) as Review[];
     res.status(200).json({ message: "Reviews Fetched", reviews });
   } catch (error) {
     console.error(error);
@@ -17,9 +22,11 @@ export const getReviews: RequestHandler = async (req, res) => {
 export const getReview: RequestHandler = async (req, res) => {
   const id = req.params.id;
   try {
-    const collection = db.collection("reviews");
+    const reviewsCollection = db.collection("reviews");
     const query = { _id: new ObjectId(id) };
-    const review = (await collection.findOne(query)) as Review;
+    const review = (await reviewsCollection.findOne(query, {
+      projection: { user: 0 },
+    })) as Review;
     res.status(200).json({ message: "Reviews Fetched", review });
   } catch (error) {
     console.error(error);
@@ -27,7 +34,10 @@ export const getReview: RequestHandler = async (req, res) => {
   }
 };
 
-export const createReview: RequestHandler = async (req, res) => {
+export const createReview: RequestHandler = async (req: CustomRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
   const rating = (req.body as { rating: number }).rating;
   const comment = (req.body as { comment: string }).comment;
   const productId = (req.body as { productId: string }).productId;
@@ -56,15 +66,34 @@ export const createReview: RequestHandler = async (req, res) => {
   }
 
   try {
+    const userCollection = db.collection("users");
+    const userQuery = { _id: new ObjectId(userId) };
+    const user = (await userCollection.findOne(userQuery)) as User;
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const reviewsCollection = db.collection("reviews");
     const productsCollection = db.collection("products");
-    const newReview = new Review(rating, comment, new ObjectId(productId));
 
-    const reviewResult = await reviewsCollection.insertOne(newReview);
+    const existingReview = (await reviewsCollection.findOne({
+      user: new ObjectId(userId),
+      product: new ObjectId(productId),
+    })) as Review;
+    if (existingReview) {
+      return res.status(400).json({ message: "Review for this product already exists!" });
+    }
+
+    const reviewResult = await reviewsCollection.insertOne({
+      rating,
+      comment,
+      product: new ObjectId(productId),
+      user: new ObjectId(userId),
+    });
     const reviewId = reviewResult.insertedId;
 
     const productQuery = { _id: new ObjectId(productId) };
-    const product = await productsCollection.findOne(productQuery);
+    const product = (await productsCollection.findOne(productQuery)) as Product;
     if (!product) {
       return res.status(404).json({ message: "Product not found!" });
     }
@@ -75,7 +104,7 @@ export const createReview: RequestHandler = async (req, res) => {
           reviews: [reviewId],
         },
       };
-    } else if (product && product.reviews.length > 0) {
+    } else if (product && product.reviews) {
       productUpdate = {
         $push: {
           reviews: reviewId,
@@ -97,7 +126,10 @@ export const createReview: RequestHandler = async (req, res) => {
   }
 };
 
-export const updateReview: RequestHandler = async (req, res) => {
+export const updateReview: RequestHandler = async (req: CustomRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
   const id = req.params.id;
   const rating = (req.body as { rating: number }).rating;
   const comment = (req.body as { comment: string }).comment;
@@ -121,15 +153,25 @@ export const updateReview: RequestHandler = async (req, res) => {
   }
 
   try {
-    const collection = db.collection("reviews");
+    const userCollection = db.collection("users");
+    const userQuery = { _id: new ObjectId(userId) };
+    const user = (await userCollection.findOne(userQuery)) as User;
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const reviewsCollection = db.collection("reviews");
     const query = { _id: new ObjectId(id) };
 
-    const review = (await collection.findOne(query)) as Review;
+    const review = (await reviewsCollection.findOne(query)) as Review;
     if (!review) {
       return res.status(404).json({ message: "Review Not Found" });
     }
 
-    const reviewResult = await collection.updateOne(query, {
+    if (user._id.toString() !== review.user.toString())
+      return res.status(401).json({ message: "Unauthorized" });
+
+    const reviewResult = await reviewsCollection.updateOne(query, {
       $set: { rating, comment },
     });
     res.status(200).json({
@@ -143,9 +185,19 @@ export const updateReview: RequestHandler = async (req, res) => {
   }
 };
 
-export const deleteReview: RequestHandler = async (req, res) => {
+export const deleteReview: RequestHandler = async (req: CustomRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
   const id = req.params.id;
   try {
+    const userCollection = db.collection("users");
+    const userQuery = { _id: new ObjectId(userId) };
+    const user = (await userCollection.findOne(userQuery)) as User;
+    if (!user || !user._id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const productsCollection = db.collection("products");
     const reviewsCollection = db.collection("reviews");
     const query = { _id: new ObjectId(id) };
@@ -155,13 +207,21 @@ export const deleteReview: RequestHandler = async (req, res) => {
       return res.status(404).json({ message: "Review Not Found" });
     }
 
+    if (user._id.toString() !== review.user.toString())
+      return res.status(401).json({ message: "Unauthorized" });
+
     const productQuery = { _id: new ObjectId(review.product) };
-    const product = await productsCollection.findOne(productQuery);
+    const product = (await productsCollection.findOne(productQuery)) as Product;
     if (!product) {
       return res.status(404).json({ message: "Product Not Found" });
     }
+    if (!product.reviews) {
+      return res.status(404).json({ message: "Product has no reviews" });
+    }
 
-    const reviewIndex = product.reviews.indexOf(review._id);
+    const reviewIndex = product.reviews.findIndex(
+      (r) => r.toString() === review._id.toString()
+    );
     if (reviewIndex !== -1) {
       product.reviews.splice(reviewIndex, 1);
     }
