@@ -1,6 +1,6 @@
 import { RequestHandler } from "express";
 import { ObjectId } from "mongodb";
-import db from "../db.js";
+import db, { client } from "../db.js";
 import Review from "../models/review.js";
 import Product from "../models/product.js";
 import User from "../models/user.js";
@@ -191,10 +191,15 @@ export const deleteReview: RequestHandler = async (req: CustomRequest, res) => {
 
   const id = req.params.id;
   try {
+    const session = client.startSession();
+    session.startTransaction();
+
     const userCollection = db.collection("users");
     const userQuery = { _id: new ObjectId(userId) };
-    const user = (await userCollection.findOne(userQuery)) as User;
-    if (!user || !user._id) {
+    const user = (await userCollection.findOne(userQuery, { session })) as User;
+    if (!user) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(401).json({ message: "Unauthorized" });
     }
 
@@ -202,20 +207,31 @@ export const deleteReview: RequestHandler = async (req: CustomRequest, res) => {
     const reviewsCollection = db.collection("reviews");
     const query = { _id: new ObjectId(id) };
 
-    const review = (await reviewsCollection.findOne(query)) as Review;
+    const review = (await reviewsCollection.findOne(query, { session })) as Review;
     if (!review) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ message: "Review Not Found" });
     }
 
-    if (user._id.toString() !== review.user.toString())
+    if (user._id.toString() !== review.user.toString()) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const productQuery = { _id: new ObjectId(review.product) };
-    const product = (await productsCollection.findOne(productQuery)) as Product;
+    const product = (await productsCollection.findOne(productQuery, {
+      session,
+    })) as Product;
     if (!product) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ message: "Product Not Found" });
     }
-    if (!product.reviews) {
+    if (!product.reviews || product.reviews.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ message: "Product has no reviews" });
     }
 
@@ -226,10 +242,17 @@ export const deleteReview: RequestHandler = async (req: CustomRequest, res) => {
       product.reviews.splice(reviewIndex, 1);
     }
 
-    const productResult = await productsCollection.updateOne(productQuery, {
-      $set: product,
-    });
-    const reviewResult = await reviewsCollection.deleteOne(query);
+    const productResult = await productsCollection.updateOne(
+      productQuery,
+      {
+        $set: product,
+      },
+      { session }
+    );
+    const reviewResult = await reviewsCollection.deleteOne(query, { session });
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.status(200).json({ message: "Review Deleted", reviewResult, productResult });
   } catch (error) {

@@ -2,6 +2,6 @@ TODO:
 -Deploy (and change mongo atlas IP config)
 
 May do:
--Native Schema validation? 
--Transactions?
--Refresh Token route or middleware?
+-Implement Transactions on all endpoints with multiple collections
+-Native Schema validation?
+-Refresh Token route or middleware
