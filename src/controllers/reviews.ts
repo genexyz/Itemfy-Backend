@@ -9,9 +9,34 @@ import { CustomRequest } from "../middlewares/auth.js";
 export const getReviews: RequestHandler = async (req, res) => {
   try {
     const reviewsCollection = db.collection("reviews");
-    const reviews = (await reviewsCollection
-      .find({}, { projection: { user: 0 } })
-      .toArray()) as Review[];
+
+    const reviews = await reviewsCollection
+      .aggregate([
+        {
+          $lookup: {
+            from: "products",
+            localField: "product",
+            foreignField: "_id",
+            as: "product",
+          },
+        },
+        {
+          $unwind: "$product",
+        },
+        {
+          $project: {
+            _id: 1,
+            rating: 1,
+            comment: 1,
+            "product._id": 1,
+            "product.title": 1,
+            "product.description": 1,
+            "product.price": 1,
+          },
+        },
+      ])
+      .toArray();
+
     res.status(200).json({ message: "Reviews Fetched", reviews });
   } catch (error) {
     console.error(error);
@@ -27,7 +52,13 @@ export const getReview: RequestHandler = async (req, res) => {
     const review = (await reviewsCollection.findOne(query, {
       projection: { user: 0 },
     })) as Review;
-    res.status(200).json({ message: "Reviews Fetched", review });
+    if (!review) return res.status(404).json({ message: "Review Not Found" });
+
+    const productsCollection = db.collection("products");
+    const queryProducts = { _id: new ObjectId(review.product) };
+    const product = (await productsCollection.findOne(queryProducts)) as Product;
+
+    res.status(200).json({ message: "Review Fetched", review, product });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server Error" });

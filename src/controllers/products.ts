@@ -3,6 +3,7 @@ import { ObjectId } from "mongodb";
 import db from "../db.js";
 import Product from "../models/product.js";
 import User from "../models/user.js";
+import Review from "../models/review.js";
 import { CustomRequest } from "../middlewares/auth.js";
 
 export const getProducts: RequestHandler = async (req, res) => {
@@ -18,11 +19,24 @@ export const getProducts: RequestHandler = async (req, res) => {
 
 export const getProduct: RequestHandler = async (req, res) => {
   const id = req.params.id;
+  let reviews: Review[] = [];
   try {
     const productsCollection = db.collection("products");
     const query = { _id: new ObjectId(id) };
     const product = (await productsCollection.findOne(query)) as Product;
-    res.status(200).json({ message: "Product Fetched", product });
+    if (!product) return res.status(404).json({ message: "Product Not Found" });
+
+    if (product.reviews && product.reviews.length > 0) {
+      const reviewsCollection = db.collection("reviews");
+      const queryReviews = product.reviews.length
+        ? { _id: { $in: product.reviews.map((id) => new ObjectId(id)) } }
+        : {};
+      reviews = (await reviewsCollection
+        .find(queryReviews, { projection: { user: 0 } })
+        .toArray()) as Review[];
+    }
+
+    res.status(200).json({ message: "Product Fetched", product, reviews });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server Error" });
