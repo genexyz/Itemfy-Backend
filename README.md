@@ -4,7 +4,7 @@ In this platform users can create, view and review Products.
 
 ## How to set up the app locally
 
-1.  Install the required dependecies
+1.  Install the required dependencies
 
 ```
 npm install
@@ -43,11 +43,11 @@ https://productsreviewsapp-backend.herokuapp.com
 ```
 
 A cloud MongoDB Atlas database already loaded with data is used in the deployment.
-If you have any error to set up the local enviroment, feel free to test the server in the deployed url.
+If you have any error to set up the local environment, feel free to test the server in the deployed URL.
 
 ### Users to test
 
-To test the app you can use the followed users, which are already loaded in the cloud database. Or you can create your own.
+To test the app you can use the following  users, which are already loaded in the cloud database. Or you can create your own.
 
 ```
 test@example.com - password1$
