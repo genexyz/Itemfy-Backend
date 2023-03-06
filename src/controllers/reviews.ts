@@ -70,8 +70,9 @@ export const createReview: RequestHandler = async (req: CustomRequest, res) => {
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   const rating = (req.body as { rating: number }).rating;
-  const comment = (req.body as { comment: string }).comment;
+  let comment = (req.body as { comment: string }).comment;
   const productId = (req.body as { productId: string }).productId;
+  if (!comment || comment === "") comment = "";
 
   const newErrors: {
     rating?: string;
@@ -83,7 +84,6 @@ export const createReview: RequestHandler = async (req: CustomRequest, res) => {
   if (typeof rating !== "number") newErrors.rating = "Must be a number!";
   if (rating && rating < 0) newErrors.rating = "Cannot be less than 0!";
   if (rating && rating > 5) newErrors.rating = "Cannot be more than 5!";
-  if (!comment || comment === "") newErrors.comment = "Cannot be blank!";
   if (typeof comment !== "string") newErrors.comment = "Must be a string!";
   if (comment && comment.length > 500)
     newErrors.comment = "Cannot be more than 500 characters!";
@@ -163,7 +163,8 @@ export const updateReview: RequestHandler = async (req: CustomRequest, res) => {
 
   const id = req.params.id;
   const rating = (req.body as { rating: number }).rating;
-  const comment = (req.body as { comment: string }).comment;
+  let comment = (req.body as { comment: string }).comment;
+  if (!comment || comment === "") comment = "";
 
   const newErrors: {
     rating?: string;
@@ -174,7 +175,6 @@ export const updateReview: RequestHandler = async (req: CustomRequest, res) => {
   if (typeof rating !== "number") newErrors.rating = "Must be a number!";
   if (rating && rating < 0) newErrors.rating = "Cannot be less than 0!";
   if (rating && rating > 5) newErrors.rating = "Cannot be more than 5!";
-  if (!comment || comment === "") newErrors.comment = "Cannot be blank!";
   if (typeof comment !== "string") newErrors.comment = "Must be a string!";
   if (comment && comment.length > 500)
     newErrors.comment = "Cannot be more than 500 characters!";

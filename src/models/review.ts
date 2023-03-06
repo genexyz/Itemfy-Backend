@@ -4,8 +4,8 @@ export default class Product {
   constructor(
     public _id: ObjectId,
     public rating: number,
-    public comment: string,
     public product: ObjectId,
-    public user: ObjectId
+    public user: ObjectId,
+    public comment?: string
   ) {}
 }
